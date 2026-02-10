@@ -111,6 +111,7 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
+local UserInputService = game:GetService("UserInputService")
 
 function TriggerBot:GetMouseTarget()
 	local mousePos = Vector2.new(Mouse.X, Mouse.Y)
@@ -238,6 +239,7 @@ function TriggerBot:SetCooldown(cooldown)
 	self.Cooldown = cooldown
 end
 
+-- FIXED AIMBOT WITH FOV CIRCLE
 local Aimbot = {
 	Enabled = false,
 	Key = Enum.KeyCode.E,
@@ -250,7 +252,54 @@ local Aimbot = {
 	Locking = false,
 	Target = nil,
 	Connections = {},
+	-- FOV Circle properties
+	FOVCircle = nil,
+	FOVColor = Color3.fromRGB(255, 255, 255),
+	FOVLockedColor = Color3.fromRGB(255, 70, 70),
+	FOVThickness = 1,
+	FOVTransparency = 0.5,
+	FOVSides = 64,
 }
+
+function Aimbot:InitFOVCircle()
+	-- Create FOV Circle using Drawing library
+	local success, result = pcall(function()
+		local circle = Drawing.new("Circle")
+		circle.Visible = true
+		circle.Thickness = self.FOVThickness
+		circle.Color = self.FOVColor
+		circle.Filled = false
+		circle.Radius = self.FOV
+		circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+		circle.Transparency = self.FOVTransparency
+		circle.NumSides = self.FOVSides
+		return circle
+	end)
+	
+	if success then
+		self.FOVCircle = result
+	else
+		warn("Drawing library not supported - FOV circle will not be visible")
+	end
+end
+
+function Aimbot:UpdateFOVCircle()
+	if not self.FOVCircle then return end
+	
+	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	self.FOVCircle.Position = screenCenter
+	self.FOVCircle.Radius = self.FOV
+	self.FOVCircle.Visible = self.Enabled
+	
+	-- Change color when locked onto target
+	if self.Locking and self.Target then
+		self.FOVCircle.Color = self.FOVLockedColor
+		self.FOVCircle.Thickness = 2
+	else
+		self.FOVCircle.Color = self.FOVColor
+		self.FOVCircle.Thickness = self.FOVThickness
+	end
+end
 
 function Aimbot:GetClosestPlayerToCursor()
 	local closestPlayer = nil
@@ -259,6 +308,7 @@ function Aimbot:GetClosestPlayerToCursor()
 	if not cam then return nil end
 	
 	local screenCenter = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+	local mousePos = UserInputService:GetMouseLocation()
 	
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
@@ -283,7 +333,7 @@ function Aimbot:GetClosestPlayerToCursor()
 			local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
 			if not onScreen then continue end
 			
-			local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+			local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
 			if distance < shortestDistance then
 				closestPlayer = player
 				shortestDistance = distance
@@ -349,41 +399,81 @@ function Aimbot:LockOn()
 	local cameraPos = cam.CFrame.Position
 	local targetCF = CFrame.lookAt(cameraPos, aimPosition)
 	
-	cam.CFrame = cam.CFrame:Lerp(targetCF, self.Smoothness)
+	-- Improved smoothness calculation
+	local smoothFactor = math.clamp(self.Smoothness, 0.01, 1)
+	cam.CFrame = cam.CFrame:Lerp(targetCF, smoothFactor)
+end
+
+function Aimbot:IsTargetValid(target)
+	if not target then return false end
+	
+	local character = target.Character
+	if not character then return false end
+	
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then return false end
+	
+	local aimPart = character:FindFirstChild(self.AimPart)
+	if not aimPart then return false end
+	
+	-- Check if still in FOV
+	local cam = Workspace.CurrentCamera
+	local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
+	if not onScreen then return false end
+	
+	local mousePos = UserInputService:GetMouseLocation()
+	local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+	if distance > self.FOV then return false end
+	
+	if self.VisibilityCheck then
+		if not self:IsVisible(aimPart) then return false end
+	end
+	
+	if self.TeamCheck and target.Team == LocalPlayer.Team then return false end
+	
+	return true
 end
 
 function Aimbot:Init()
+	-- Initialize FOV Circle
+	self:InitFOVCircle()
+	
+	-- RenderStepped connection for aimbot logic
 	table.insert(self.Connections, RunService.RenderStepped:Connect(function()
-		if self.Enabled and self.Locking and self.Target then
-			local character = self.Target.Character
-			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-			
-			if not character or not humanoid or humanoid.Health <= 0 then
-				self.Target = nil
+		-- Update FOV Circle
+		self:UpdateFOVCircle()
+		
+		-- Check if key is still being held (IMPORTANT FIX)
+		if self.Locking then
+			if not UserInputService:IsKeyDown(self.Key) then
+				-- Key was released but we didn't catch it
 				self.Locking = false
+				self.Target = nil
 				return
 			end
-			
-			local aimPart = character:FindFirstChild(self.AimPart)
-			if not aimPart then
-				self.Target = nil
-				self.Locking = false
-				return
-			end
-			
-			if self.VisibilityCheck and not self:IsVisible(aimPart) then
-				self.Target = nil
-				self.Locking = false
-				return
+		end
+		
+		if self.Enabled and self.Locking then
+			-- Validate current target
+			if not self:IsTargetValid(self.Target) then
+				-- Try to find new target
+				self.Target = self:GetClosestPlayerToCursor()
+				if not self.Target then
+					self.Locking = false
+					return
+				end
 			end
 			
 			self:LockOn()
 		end
 	end))
 	
-	table.insert(self.Connections, game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+	-- InputBegan - Start locking when key is pressed
+	table.insert(self.Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		if input.KeyCode == self.Key and self.Enabled then
+		if not self.Enabled then return end
+		
+		if input.KeyCode == self.Key then
 			local target = self:GetClosestPlayerToCursor()
 			if target then
 				self.Target = target
@@ -392,12 +482,20 @@ function Aimbot:Init()
 		end
 	end))
 	
-	table.insert(self.Connections, game:GetService("UserInputService").InputEnded:Connect(function(input)
+	-- InputEnded - Stop locking when key is released
+	table.insert(self.Connections, UserInputService.InputEnded:Connect(function(input)
 		if input.KeyCode == self.Key then
 			self.Locking = false
 			self.Target = nil
 		end
 	end))
+	
+	-- Handle viewport size changes
+	if self.FOVCircle then
+		table.insert(self.Connections, Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			self:UpdateFOVCircle()
+		end))
+	end
 end
 
 function Aimbot:SetEnabled(enabled)
@@ -425,7 +523,7 @@ function Aimbot:SetPrediction(prediction)
 end
 
 function Aimbot:SetSmoothness(smoothness)
-	self.Smoothness = smoothness
+	self.Smoothness = math.clamp(smoothness, 0.01, 1)
 end
 
 function Aimbot:SetAimPart(part)
@@ -441,6 +539,12 @@ function Aimbot:Destroy()
 		connection:Disconnect()
 	end
 	self.Connections = {}
+	
+	if self.FOVCircle then
+		self.FOVCircle:Remove()
+		self.FOVCircle = nil
+	end
+	
 	self.Locking = false
 	self.Target = nil
 end
@@ -705,7 +809,7 @@ function UI:Init()
 	
 	Library:Notify({
 		Title = "M1X Loaded",
-		Content = "Press F1 to toggle menu",
+		Content = "Press F1 to toggle menu | Hold E for aimbot",
 		Duration = 5,
 	})
 end
@@ -821,7 +925,7 @@ function UI:SetupAimbotTab(Tab)
 	AimbotGroup:AddToggle("AimbotEnabled", {
 		Text = "Aimbot Enabled",
 		Default = false,
-		Tooltip = "Enable camera lock aimbot",
+		Tooltip = "Enable camera lock aimbot with FOV circle",
 	}):OnChanged(function(Value)
 		Aimbot:SetEnabled(Value)
 	end)
@@ -849,6 +953,17 @@ function UI:SetupAimbotTab(Tab)
 		Tooltip = "Body part to aim at",
 	}):OnChanged(function(Value)
 		Aimbot:SetAimPart(Value)
+	end)
+	
+	AimbotGroup:AddSlider("AimbotFOV", {
+		Text = "FOV Radius",
+		Default = 200,
+		Min = 50,
+		Max = 500,
+		Rounding = 0,
+		Suffix = " px",
+	}):OnChanged(function(Value)
+		Aimbot:SetFOV(Value)
 	end)
 	
 	AimbotGroup:AddSlider("Smoothness", {
@@ -879,7 +994,8 @@ function UI:SetupAimbotTab(Tab)
 	
 	local InfoGroup = Tab:AddRightGroupbox("Info", "info")
 	
-	InfoGroup:AddLabel("Camera lock with prediction", true)
+	InfoGroup:AddLabel("White Circle = FOV Range", true)
+	InfoGroup:AddLabel("Red Circle = Locked On", true)
 	InfoGroup:AddLabel("Smoothness: lower = snappier", true)
 	InfoGroup:AddLabel("Prediction: compensates movement", true)
 end
@@ -929,7 +1045,7 @@ end
 TriggerBot:Init()
 Aimbot:Init()
 ESP:Init()
-UI:Init(ESP, TriggerBot, Aimbot)
+UI:Init()
 
 M1X.TriggerBot = TriggerBot
 M1X.Aimbot = Aimbot
