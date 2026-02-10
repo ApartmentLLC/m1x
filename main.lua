@@ -238,6 +238,210 @@ function TriggerBot:SetCooldown(cooldown)
 	self.Cooldown = cooldown
 end
 
+local Aimbot = {
+	Enabled = false,
+	Key = Enum.KeyCode.E,
+	TeamCheck = true,
+	VisibilityCheck = true,
+	Prediction = 0.165,
+	Smoothness = 0.08,
+	AimPart = "Head",
+	FOV = 200,
+	Locking = false,
+	Target = nil,
+	Connections = {},
+}
+
+function Aimbot:GetClosestPlayerToCursor()
+	local closestPlayer = nil
+	local shortestDistance = self.FOV
+	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			if self.TeamCheck and player.Team == LocalPlayer.Team then
+				continue
+			end
+			
+			local character = player.Character
+			if not character then continue end
+			
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if not humanoid or humanoid.Health <= 0 then continue end
+			
+			local aimPart = character:FindFirstChild(self.AimPart)
+			if not aimPart then continue end
+			
+			if self.VisibilityCheck then
+				local isVisible = self:IsVisible(aimPart)
+				if not isVisible then continue end
+			end
+			
+			local screenPos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+			if not onScreen then continue end
+			
+			local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+			if distance < shortestDistance then
+				closestPlayer = player
+				shortestDistance = distance
+			end
+		end
+	end
+	
+	return closestPlayer
+end
+
+function Aimbot:IsVisible(part)
+	if not part then return false end
+	
+	local origin = Camera.CFrame.Position
+	local direction = part.Position - origin
+	local distance = direction.Magnitude
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, part.Parent}
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.IgnoreWater = true
+	
+	local result = Workspace:Raycast(origin, direction.Unit * math.min(distance, 5000), raycastParams)
+	
+	return result == nil
+end
+
+function Aimbot:GetPredictionPosition(character)
+	local aimPart = character:FindFirstChild(self.AimPart)
+	if not aimPart then return nil end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return aimPart.Position end
+	
+	local velocity = rootPart.Velocity
+	local position = aimPart.Position
+	
+	if velocity.Magnitude > 0.1 then
+		position = position + (velocity * self.Prediction)
+	end
+	
+	return position
+end
+
+function Aimbot:LockOn()
+	if not self.Target then return end
+	
+	local character = self.Target.Character
+	if not character then
+		self.Target = nil
+		return
+	end
+	
+	local aimPosition = self:GetPredictionPosition(character)
+	if not aimPosition then return end
+	
+	local currentCF = Camera.CFrame
+	local targetDirection = (aimPosition - currentCF.Position).Unit
+	
+	local smoothCF = CFrame.new(currentCF.Position, currentCF.Position + (currentCF.LookVector:Lerp(targetDirection, self.Smoothness)))
+	Camera.CFrame = smoothCF
+end
+
+function Aimbot:Init()
+	table.insert(self.Connections, RunService.RenderStepped:Connect(function()
+		if self.Enabled and self.Locking and self.Target then
+			local character = self.Target.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			
+			if not character or not humanoid or humanoid.Health <= 0 then
+				self.Target = nil
+				self.Locking = false
+				return
+			end
+			
+			local aimPart = character:FindFirstChild(self.AimPart)
+			if not aimPart then
+				self.Target = nil
+				self.Locking = false
+				return
+			end
+			
+			if self.VisibilityCheck and not self:IsVisible(aimPart) then
+				self.Target = nil
+				self.Locking = false
+				return
+			end
+			
+			self:LockOn()
+		end
+	end))
+	
+	table.insert(self.Connections, game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.KeyCode == self.Key then
+			if not self.Locking then
+				local target = self:GetClosestPlayerToCursor()
+				if target then
+					self.Target = target
+					self.Locking = true
+				end
+			else
+				self.Locking = false
+				self.Target = nil
+			end
+		end
+	end))
+	
+	table.insert(self.Connections, game:GetService("UserInputService").InputEnded:Connect(function(input)
+		if input.KeyCode == self.Key then
+			self.Locking = false
+			self.Target = nil
+		end
+	end))
+end
+
+function Aimbot:SetEnabled(enabled)
+	self.Enabled = enabled
+	if not enabled then
+		self.Locking = false
+		self.Target = nil
+	end
+end
+
+function Aimbot:SetKey(key)
+	self.Key = key
+end
+
+function Aimbot:SetTeamCheck(enabled)
+	self.TeamCheck = enabled
+end
+
+function Aimbot:SetVisibilityCheck(enabled)
+	self.VisibilityCheck = enabled
+end
+
+function Aimbot:SetPrediction(prediction)
+	self.Prediction = prediction
+end
+
+function Aimbot:SetSmoothness(smoothness)
+	self.Smoothness = smoothness
+end
+
+function Aimbot:SetAimPart(part)
+	self.AimPart = part
+end
+
+function Aimbot:SetFOV(fov)
+	self.FOV = fov
+end
+
+function Aimbot:Destroy()
+	for _, connection in ipairs(self.Connections) do
+		connection:Disconnect()
+	end
+	self.Connections = {}
+	self.Locking = false
+	self.Target = nil
+end
+
 function TriggerBot:Destroy()
 	for _, connection in ipairs(self.Connections) do
 		connection:Disconnect()
@@ -479,11 +683,13 @@ function UI:Init()
 	local Tabs = {
 		ESP = Window:AddTab("ESP", "eye"),
 		TriggerBot = Window:AddTab("TriggerBot", "crosshair"),
+		Aimbot = Window:AddTab("Aimbot", "target"),
 		Settings = Window:AddTab("Settings", "settings"),
 	}
 	
 	self:SetupESPTab(Tabs.ESP)
 	self:SetupTriggerBotTab(Tabs.TriggerBot)
+	self:SetupAimbotTab(Tabs.Aimbot)
 	self:SetupSettingsTab(Tabs.Settings)
 	
 	ThemeManager:SetLibrary(Library)
@@ -606,6 +812,75 @@ function UI:SetupTriggerBotTab(Tab)
 	InfoGroup:AddLabel("head or body", true)
 end
 
+function UI:SetupAimbotTab(Tab)
+	local AimbotGroup = Tab:AddLeftGroupbox("Aimbot", "target")
+	
+	AimbotGroup:AddToggle("AimbotEnabled", {
+		Text = "Aimbot Enabled",
+		Default = false,
+		Tooltip = "Enable camera lock aimbot",
+	}):OnChanged(function(Value)
+		Aimbot:SetEnabled(Value)
+	end)
+	
+	AimbotGroup:AddToggle("AimbotTeamCheck", {
+		Text = "Team Check",
+		Default = true,
+		Tooltip = "Ignore teammates",
+	}):OnChanged(function(Value)
+		Aimbot:SetTeamCheck(Value)
+	end)
+	
+	AimbotGroup:AddToggle("AimbotVisibility", {
+		Text = "Visibility Check",
+		Default = true,
+		Tooltip = "Only aim at visible targets",
+	}):OnChanged(function(Value)
+		Aimbot:SetVisibilityCheck(Value)
+	end)
+	
+	AimbotGroup:AddDropdown("AimPart", {
+		Text = "Aim Part",
+		Default = "Head",
+		Values = {"Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
+		Tooltip = "Body part to aim at",
+	}):OnChanged(function(Value)
+		Aimbot:SetAimPart(Value)
+	end)
+	
+	AimbotGroup:AddSlider("Smoothness", {
+		Text = "Smoothness",
+		Default = 0.08,
+		Min = 0.01,
+		Max = 1,
+		Rounding = 2,
+	}):OnChanged(function(Value)
+		Aimbot:SetSmoothness(Value)
+	end)
+	
+	AimbotGroup:AddSlider("Prediction", {
+		Text = "Prediction",
+		Default = 0.165,
+		Min = 0,
+		Max = 0.5,
+		Rounding = 3,
+	}):OnChanged(function(Value)
+		Aimbot:SetPrediction(Value)
+	end)
+	
+	local KeyGroup = Tab:AddRightGroupbox("Keybind", "key")
+	
+	KeyGroup:AddLabel("Hold E to lock on", true)
+	KeyGroup:AddLabel("Release E to unlock", true)
+	KeyGroup:AddLabel("Aims at closest to crosshair", true)
+	
+	local InfoGroup = Tab:AddRightGroupbox("Info", "info")
+	
+	InfoGroup:AddLabel("Camera lock with prediction", true)
+	InfoGroup:AddLabel("Smoothness: lower = snappier", true)
+	InfoGroup:AddLabel("Prediction: compensates movement", true)
+end
+
 function UI:SetupSettingsTab(Tab)
 	local MenuGroup = Tab:AddLeftGroupbox("Menu", "settings")
 	
@@ -614,6 +889,7 @@ function UI:SetupSettingsTab(Tab)
 	MenuGroup:AddButton({
 		Text = "Unload",
 		Func = function()
+			Aimbot:Destroy()
 			TriggerBot:Destroy()
 			ESP:Destroy()
 			Library:Unload()
@@ -648,10 +924,12 @@ function Utils:IsValidCharacter(character)
 end
 
 TriggerBot:Init()
+Aimbot:Init()
 ESP:Init()
-UI:Init()
+UI:Init(ESP, TriggerBot, Aimbot)
 
 M1X.TriggerBot = TriggerBot
+M1X.Aimbot = Aimbot
 M1X.ESP = ESP
 M1X.UI = UI
 M1X.Utils = Utils
