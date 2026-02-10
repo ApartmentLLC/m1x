@@ -95,7 +95,10 @@ local TriggerBot = {
 	TeamCheck = true,
 	HeadOnly = true,
 	Delay = 0,
+	Cooldown = 0.1,
+	LastShot = 0,
 	Connections = {},
+	VIM = game:GetService("VirtualInputManager"),
 }
 
 local ESP = {}
@@ -109,42 +112,101 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
+function TriggerBot:GetMouseTarget()
+	local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+	local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	
+	local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+	if result then
+		return result.Instance
+	end
+	
+	return Mouse.Target
+end
+
 function TriggerBot:IsValidTarget(target)
 	if not target then return false end
 	
-	local model = target:FindFirstAncestorWhichIsA("Model")
-	if not model then return false end
+	local char = target:FindFirstAncestorOfClass("Model")
+	if not char then
+		char = target.Parent
+		while char and char.Parent ~= Workspace do
+			if char:FindFirstChildOfClass("Humanoid") then
+				break
+			end
+			char = char.Parent
+		end
+	end
 	
-	local player = Players:GetPlayerFromCharacter(model)
+	if not char then return false end
+	
+	local player = Players:GetPlayerFromCharacter(char)
 	if not player then return false end
 	
 	if player == LocalPlayer then return false end
 	
-	if self.TeamCheck and player.Team == LocalPlayer.Team then return false end
+	if self.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+		return false
+	end
 	
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then return false end
 	
 	if self.HeadOnly then
-		return target.Name == "Head" or target.Parent.Name == "Head"
+		local head = char:FindFirstChild("Head")
+		if not head then return false end
+		
+		if target == head or target:IsDescendantOf(head) then
+			return true
+		end
+		return false
 	end
 	
-	return true
+	local torso = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+	if not torso then return false end
+	
+	return target == torso or target:IsDescendantOf(char)
+end
+
+function TriggerBot:Click()
+	local x, y = Mouse.X, Mouse.Y
+	
+	if mouse1press and mouse1release then
+		mouse1press()
+		task.wait(0.015)
+		mouse1release()
+	else
+		self.VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+		task.wait(0.015)
+		self.VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+	end
 end
 
 function TriggerBot:CheckTarget()
 	if not self.Enabled then return end
 	
-	local target = Mouse.Target
+	local currentTime = tick()
+	if currentTime - self.LastShot < self.Cooldown then return end
+	
+	local target = self:GetMouseTarget()
 	if not target then return end
 	
 	if self:IsValidTarget(target) then
+		self.LastShot = currentTime
+		
 		if self.Delay > 0 then
-			task.wait(self.Delay)
+			task.delay(self.Delay, function()
+				if self.Enabled then
+					self:Click()
+				end
+			end)
+		else
+			self:Click()
 		end
-		Wave.Functions.mouse1press()
-		task.wait(0.01)
-		Wave.Functions.mouse1release()
 	end
 end
 
@@ -170,6 +232,10 @@ end
 
 function TriggerBot:SetDelay(delay)
 	self.Delay = delay
+end
+
+function TriggerBot:SetCooldown(cooldown)
+	self.Cooldown = cooldown
 end
 
 function TriggerBot:Destroy()

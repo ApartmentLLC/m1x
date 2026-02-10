@@ -147,11 +147,22 @@ function UI:SetupTriggerBotTab(Tab)
 		self.TriggerBot:SetDelay(Value / 1000)
 	end)
 	
+	TriggerGroup:AddSlider("TriggerCooldown", {
+		Text = "Cooldown",
+		Default = 100,
+		Min = 50,
+		Max = 1000,
+		Rounding = 0,
+		Suffix = " ms",
+	}):OnChanged(function(Value)
+		self.TriggerBot:SetCooldown(Value / 1000)
+	end)
+	
 	local InfoGroup = Tab:AddRightGroupbox("Info", "info")
 	
 	InfoGroup:AddLabel("Auto shoots when mouse", true)
 	InfoGroup:AddLabel("is directly over enemy", true)
-	InfoGroup:AddLabel("head or body", true)
+	InfoGroup:AddLabel("Uses Raycast + Mouse.Target", true)
 end
 
 function UI:SetupSettingsTab(Tab)
