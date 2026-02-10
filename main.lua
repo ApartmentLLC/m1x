@@ -120,7 +120,7 @@ function TriggerBot:GetMouseTarget()
 	raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
 	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 	
-	local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+	local result = Workspace:Raycast(ray.Origin, ray.Direction * 5000, raycastParams)
 	if result then
 		return result.Instance
 	end
@@ -284,14 +284,13 @@ function ESP:IsPlayerVisible(targetPlayer)
 	if targetHumanoid.Health <= 0 then return false end
 	
 	local distance = (targetRoot.Position - localRoot.Position).Magnitude
-	if distance > self.MaxDistance then return false end
 	
 	local raycastParams = RaycastParams.new()
 	raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, targetPlayer.Character}
 	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 	raycastParams.IgnoreWater = true
 	
-	local direction = (targetRoot.Position - localRoot.Position).Unit * distance
+	local direction = (targetRoot.Position - localRoot.Position).Unit * math.min(distance, 5000)
 	local result = Workspace:Raycast(localRoot.Position, direction, raycastParams)
 	
 	return result == nil
@@ -354,6 +353,14 @@ function ESP:UpdateAll()
 			self:UpdateHighlight(player)
 		end
 	end
+end
+
+function ESP:GetDistanceToPlayer(player)
+	if not player.Character or not LocalPlayer.Character then return math.huge end
+	local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+	local localRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not targetRoot or not localRoot then return math.huge end
+	return (targetRoot.Position - localRoot.Position).Magnitude
 end
 
 function ESP:OnPlayerAdded(player)
