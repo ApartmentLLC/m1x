@@ -239,309 +239,103 @@ function TriggerBot:SetCooldown(cooldown)
 	self.Cooldown = cooldown
 end
 
--- FIXED AIMBOT WITH FOV CIRCLE
+-- FIXED AIMBOT WITH FOV CIRCLE (CAM LOCK STYLE)
 local Aimbot = {
 	Enabled = false,
 	Key = Enum.KeyCode.E,
 	TeamCheck = true,
-	VisibilityCheck = true,
 	Prediction = 0.165,
 	Smoothness = 0.08,
-	AimPart = "Head",
-	FOV = 200,
+	AimPart = "HumanoidRootPart",
 	Locking = false,
 	Target = nil,
 	Connections = {},
-	-- FOV Circle properties
-	FOVCircle = nil,
-	FOVColor = Color3.fromRGB(255, 255, 255),
-	FOVLockedColor = Color3.fromRGB(255, 70, 70),
-	FOVThickness = 1,
-	FOVTransparency = 0.5,
-	FOVSides = 64,
 }
 
-function Aimbot:InitFOVCircle()
-	-- Create FOV Circle using Drawing library
-	local success, result = pcall(function()
-		local circle = Drawing.new("Circle")
-		circle.Visible = true
-		circle.Thickness = self.FOVThickness
-		circle.Color = self.FOVColor
-		circle.Filled = false
-		circle.Radius = self.FOV
-		circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-		circle.Transparency = self.FOVTransparency
-		circle.NumSides = self.FOVSides
-		return circle
-	end)
-	
-	if success then
-		self.FOVCircle = result
-	else
-		warn("Drawing library not supported - FOV circle will not be visible")
-	end
-end
-
-function Aimbot:UpdateFOVCircle()
-	if not self.FOVCircle then return end
-	
-	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-	self.FOVCircle.Position = screenCenter
-	self.FOVCircle.Radius = self.FOV
-	self.FOVCircle.Visible = self.Enabled
-	
-	-- Change color when locked onto target
-	if self.Locking and self.Target then
-		self.FOVCircle.Color = self.FOVLockedColor
-		self.FOVCircle.Thickness = 2
-	else
-		self.FOVCircle.Color = self.FOVColor
-		self.FOVCircle.Thickness = self.FOVThickness
-	end
-end
-
-function Aimbot:GetClosestPlayerToCursor()
-	local closestPlayer = nil
-	local shortestDistance = self.FOV
-	local cam = Workspace.CurrentCamera
-	if not cam then return nil end
-	
-	local screenCenter = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+function Aimbot:GetClosestTarget()
+	local closestDist = math.huge
+	local target = nil
+	local mousePos = UserInputService:GetMouseLocation()
 	
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
-			if self.TeamCheck and player.Team == LocalPlayer.Team then
-				continue
-			end
+			if self.TeamCheck and player.Team == LocalPlayer.Team then continue end
 			
 			local character = player.Character
 			if not character then continue end
 			
-			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			local humanoid = character:FindFirstChild("Humanoid")
 			if not humanoid or humanoid.Health <= 0 then continue end
 			
-			local aimPart = character:FindFirstChild(self.AimPart)
-			if not aimPart then continue end
+			local rootPart = character:FindFirstChild("HumanoidRootPart")
+			if not rootPart then continue end
 			
-			if self.VisibilityCheck then
-				local isVisible = self:IsVisible(aimPart)
-				if not isVisible then continue end
-			end
-			
-			local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
-			if not onScreen then continue end
-			
-			local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-			if distance < shortestDistance then
-				closestPlayer = player
-				shortestDistance = distance
+			local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+			if onScreen then
+				local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+				if dist < closestDist then
+					closestDist = dist
+					target = rootPart
+				end
 			end
 		end
 	end
 	
-	return closestPlayer
-end
-
-function Aimbot:IsVisible(part)
-	if not part then return false end
-	
-	local cam = Workspace.CurrentCamera
-	if not cam then return false end
-	
-	local origin = cam.CFrame.Position
-	local direction = part.Position - origin
-	local distance = direction.Magnitude
-	
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, part.Parent}
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-	raycastParams.IgnoreWater = true
-	
-	local result = Workspace:Raycast(origin, direction.Unit * math.min(distance, 5000), raycastParams)
-	
-	return result == nil
-end
-
-function Aimbot:GetPredictionPosition(character)
-	local aimPart = character:FindFirstChild(self.AimPart)
-	if not aimPart then return nil end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then return aimPart.Position end
-	
-	local velocity = rootPart.Velocity
-	local position = aimPart.Position
-	
-	if velocity.Magnitude > 0.1 then
-		position = position + (velocity * self.Prediction)
-	end
-	
-	return position
-end
-
-function Aimbot:LockOn()
-	if not self.Target then return end
-	
-	local character = self.Target.Character
-	if not character then
-		self.Target = nil
-		return
-	end
-	
-	local aimPosition = self:GetPredictionPosition(character)
-	if not aimPosition then return end
-	
-	local cam = Workspace.CurrentCamera
-	if not cam then return end
-	
-	local cameraPos = cam.CFrame.Position
-	local targetCF = CFrame.lookAt(cameraPos, aimPosition)
-	
-	-- Improved smoothness calculation
-	local smoothFactor = math.clamp(self.Smoothness, 0.01, 1)
-	cam.CFrame = cam.CFrame:Lerp(targetCF, smoothFactor)
-end
-
-function Aimbot:IsTargetValid(target)
-	if not target then return false end
-	
-	local character = target.Character
-	if not character then return false end
-	
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid or humanoid.Health <= 0 then return false end
-	
-	local aimPart = character:FindFirstChild(self.AimPart)
-	if not aimPart then return false end
-	
-	-- Check if still in FOV
-	local cam = Workspace.CurrentCamera
-	local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
-	if not onScreen then return false end
-	
-	local screenCenter = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
-	local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-	if distance > self.FOV then return false end
-	
-	if self.VisibilityCheck then
-		if not self:IsVisible(aimPart) then return false end
-	end
-	
-	if self.TeamCheck and target.Team == LocalPlayer.Team then return false end
-	
-	return true
+	return target
 end
 
 function Aimbot:Init()
-	-- Initialize FOV Circle
-	self:InitFOVCircle()
-	
-	-- RenderStepped connection for aimbot logic
+	-- RenderStepped for Camera Lock
 	table.insert(self.Connections, RunService.RenderStepped:Connect(function()
-		-- Update FOV Circle
-		self:UpdateFOVCircle()
-		
-		-- Check if key is still being held (IMPORTANT FIX)
-		if self.Locking then
-			if not UserInputService:IsKeyDown(self.Key) then
-				-- Key was released but we didn't catch it
+		if self.Enabled and self.Locking and self.Target and self.Target.Parent then
+			local humanoid = self.Target.Parent:FindFirstChild("Humanoid")
+			if humanoid and humanoid.Health > 0 then
+				local camPos = Camera.CFrame.Position
+				local targetPos = self.Target.Position + (self.Target.Velocity * self.Prediction)
+				local lookCFrame = CFrame.lookAt(camPos, targetPos)
+				
+				Camera.CFrame = Camera.CFrame:Lerp(lookCFrame, self.Smoothness)
+			else
 				self.Locking = false
 				self.Target = nil
-				return
-			end
-		end
-		
-		if self.Enabled and self.Locking then
-			-- Validate current target
-			if not self:IsTargetValid(self.Target) then
-				-- Try to find new target
-				self.Target = self:GetClosestPlayerToCursor()
-			end
-			
-			if self.Target then
-				self:LockOn()
 			end
 		end
 	end))
 	
-	-- InputBegan - Start locking when key is pressed
+	-- Input Handling
 	table.insert(self.Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if not self.Enabled then return end
 		
 		if input.KeyCode == self.Key then
-			self.Locking = true
-			self.Target = self:GetClosestPlayerToCursor()
+			self.Target = self:GetClosestTarget()
+			if self.Target then
+				self.Locking = true
+			end
 		end
 	end))
 	
-	-- InputEnded - Stop locking when key is released
 	table.insert(self.Connections, UserInputService.InputEnded:Connect(function(input)
 		if input.KeyCode == self.Key then
 			self.Locking = false
 			self.Target = nil
 		end
 	end))
-	
-	-- Handle viewport size changes
-	if self.FOVCircle then
-		table.insert(self.Connections, Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			self:UpdateFOVCircle()
-		end))
-	end
 end
 
-function Aimbot:SetEnabled(enabled)
-	self.Enabled = enabled
-	if not enabled then
-		self.Locking = false
-		self.Target = nil
-	end
-end
-
-function Aimbot:SetKey(key)
-	self.Key = key
-end
-
-function Aimbot:SetTeamCheck(enabled)
-	self.TeamCheck = enabled
-end
-
-function Aimbot:SetVisibilityCheck(enabled)
-	self.VisibilityCheck = enabled
-end
-
-function Aimbot:SetPrediction(prediction)
-	self.Prediction = prediction
-end
-
-function Aimbot:SetSmoothness(smoothness)
-	self.Smoothness = math.clamp(smoothness, 0.01, 1)
-end
-
-function Aimbot:SetAimPart(part)
-	self.AimPart = part
-end
-
-function Aimbot:SetFOV(fov)
-	self.FOV = fov
-end
+function Aimbot:SetEnabled(enabled) self.Enabled = enabled end
+function Aimbot:SetTeamCheck(enabled) self.TeamCheck = enabled end
+function Aimbot:SetPrediction(val) self.Prediction = val end
+function Aimbot:SetSmoothness(val) self.Smoothness = val end
+function Aimbot:SetAimPart(part) self.AimPart = part end
 
 function Aimbot:Destroy()
-	for _, connection in ipairs(self.Connections) do
-		connection:Disconnect()
-	end
+	for _, conn in ipairs(self.Connections) do conn:Disconnect() end
 	self.Connections = {}
-	
-	if self.FOVCircle then
-		self.FOVCircle:Remove()
-		self.FOVCircle = nil
-	end
-	
-	self.Locking = false
-	self.Target = nil
 end
+
+-- Removed FOV Circle Logic for simplicity/robustness as requested by "cam lock" style
+
 
 function TriggerBot:Destroy()
 	for _, connection in ipairs(self.Connections) do

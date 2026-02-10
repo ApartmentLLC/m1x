@@ -26,15 +26,13 @@ function UI:Init(ESP, TriggerBot, Aimbot)
 	Library.ToggleKeybind = Enum.KeyCode.F1
 	
 	local Tabs = {
-		ESP = Window:AddTab("ESP", "eye"),
-		TriggerBot = Window:AddTab("TriggerBot", "crosshair"),
-		Aimbot = Window:AddTab("Aimbot", "target"),
+		Aim = Window:AddTab("Aim", "target"),
+		Visuals = Window:AddTab("Visuals", "eye"),
 		Settings = Window:AddTab("Settings", "settings"),
 	}
 	
-	self:SetupESPTab(Tabs.ESP)
-	self:SetupTriggerBotTab(Tabs.TriggerBot)
-	self:SetupAimbotTab(Tabs.Aimbot)
+	self:SetupAimTab(Tabs.Aim)
+	self:SetupVisualsTab(Tabs.Visuals)
 	self:SetupSettingsTab(Tabs.Settings)
 	
 	ThemeManager:SetLibrary(Library)
@@ -47,12 +45,111 @@ function UI:Init(ESP, TriggerBot, Aimbot)
 	
 	Library:Notify({
 		Title = "M1X Loaded",
-		Content = "Press F1 to toggle menu",
+		Content = "Press F1 to toggle menu | Hold E for aimbot",
 		Duration = 5,
 	})
 end
 
-function UI:SetupESPTab(Tab)
+function UI:SetupAimTab(Tab)
+	-- Aimbot Section (Left)
+	local AimbotGroup = Tab:AddLeftGroupbox("Aimbot", "target")
+	
+	AimbotGroup:AddToggle("AimbotEnabled", {
+		Text = "Enabled",
+		Default = false,
+		Tooltip = "Enable camera lock aimbot",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetEnabled(Value)
+	end)
+	
+	AimbotGroup:AddToggle("AimbotTeamCheck", {
+		Text = "Team Check",
+		Default = true,
+		Tooltip = "Ignore teammates",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetTeamCheck(Value)
+	end)
+	
+	AimbotGroup:AddDropdown("AimPart", {
+		Text = "Aim Part",
+		Default = "HumanoidRootPart",
+		Values = {"Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
+		Tooltip = "Body part to lock onto",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetAimPart(Value)
+	end)
+	
+	AimbotGroup:AddSlider("Smoothness", {
+		Text = "Smoothness",
+		Default = 0.08,
+		Min = 0.01,
+		Max = 1,
+		Rounding = 2,
+	}):OnChanged(function(Value)
+		self.Aimbot:SetSmoothness(Value)
+	end)
+	
+	AimbotGroup:AddSlider("Prediction", {
+		Text = "Prediction",
+		Default = 0.165,
+		Min = 0,
+		Max = 0.5,
+		Rounding = 3,
+	}):OnChanged(function(Value)
+		self.Aimbot:SetPrediction(Value)
+	end)
+	
+	-- TriggerBot Section (Right)
+	local TriggerGroup = Tab:AddRightGroupbox("TriggerBot", "crosshair")
+	
+	TriggerGroup:AddToggle("TriggerBotEnabled", {
+		Text = "Enabled",
+		Default = false,
+		Tooltip = "Auto shoot when mouse is on enemy",
+	}):OnChanged(function(Value)
+		self.TriggerBot:SetEnabled(Value)
+	end)
+	
+	TriggerGroup:AddToggle("TriggerTeamCheck", {
+		Text = "Team Check",
+		Default = true,
+		Tooltip = "Ignore teammates",
+	}):OnChanged(function(Value)
+		self.TriggerBot:SetTeamCheck(Value)
+	end)
+	
+	TriggerGroup:AddToggle("TriggerHeadOnly", {
+		Text = "Head Only",
+		Default = true,
+		Tooltip = "Only trigger on head hits",
+	}):OnChanged(function(Value)
+		self.TriggerBot:SetHeadOnly(Value)
+	end)
+	
+	TriggerGroup:AddSlider("TriggerDelay", {
+		Text = "Delay",
+		Default = 0,
+		Min = 0,
+		Max = 500,
+		Rounding = 0,
+		Suffix = " ms",
+	}):OnChanged(function(Value)
+		self.TriggerBot:SetDelay(Value / 1000)
+	end)
+	
+	TriggerGroup:AddSlider("TriggerCooldown", {
+		Text = "Cooldown",
+		Default = 100,
+		Min = 50,
+		Max = 1000,
+		Rounding = 0,
+		Suffix = " ms",
+	}):OnChanged(function(Value)
+		self.TriggerBot:SetCooldown(Value / 1000)
+	end)
+end
+
+function UI:SetupVisualsTab(Tab)
 	local ESPGroup = Tab:AddLeftGroupbox("ESP Settings", "eye")
 	
 	ESPGroup:AddToggle("ESPEnabled", {
@@ -101,130 +198,8 @@ function UI:SetupESPTab(Tab)
 	})
 end
 
-function UI:SetupTriggerBotTab(Tab)
-	local TriggerGroup = Tab:AddLeftGroupbox("TriggerBot", "crosshair")
-	
-	TriggerGroup:AddToggle("TriggerBotEnabled", {
-		Text = "TriggerBot Enabled",
-		Default = false,
-		Tooltip = "Auto shoot when mouse is on enemy",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetEnabled(Value)
-	end)
-	
-	TriggerGroup:AddToggle("TriggerTeamCheck", {
-		Text = "Team Check",
-		Default = true,
-		Tooltip = "Ignore teammates",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetTeamCheck(Value)
-	end)
-	
-	TriggerGroup:AddToggle("TriggerHeadOnly", {
-		Text = "Head Only",
-		Default = true,
-		Tooltip = "Only trigger on head hits",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetHeadOnly(Value)
-	end)
-	
-	TriggerGroup:AddSlider("TriggerDelay", {
-		Text = "Delay",
-		Default = 0,
-		Min = 0,
-		Max = 500,
-		Rounding = 0,
-		Suffix = " ms",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetDelay(Value / 1000)
-	end)
-	
-	TriggerGroup:AddSlider("TriggerCooldown", {
-		Text = "Cooldown",
-		Default = 100,
-		Min = 50,
-		Max = 1000,
-		Rounding = 0,
-		Suffix = " ms",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetCooldown(Value / 1000)
-	end)
-	
-	local InfoGroup = Tab:AddRightGroupbox("Info", "info")
-	
-	InfoGroup:AddLabel("Auto shoots when mouse", true)
-	InfoGroup:AddLabel("is directly over enemy", true)
-	InfoGroup:AddLabel("Uses Raycast detection", true)
-end
+-- Removed SetupTriggerBotTab and SetupAimbotTab as they are now merged into SetupAimTab
 
-function UI:SetupAimbotTab(Tab)
-	local AimbotGroup = Tab:AddLeftGroupbox("Aimbot", "target")
-	
-	AimbotGroup:AddToggle("AimbotEnabled", {
-		Text = "Aimbot Enabled",
-		Default = false,
-		Tooltip = "Enable camera lock aimbot",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetEnabled(Value)
-	end)
-	
-	AimbotGroup:AddToggle("AimbotTeamCheck", {
-		Text = "Team Check",
-		Default = true,
-		Tooltip = "Ignore teammates",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetTeamCheck(Value)
-	end)
-	
-	AimbotGroup:AddToggle("AimbotVisibility", {
-		Text = "Visibility Check",
-		Default = true,
-		Tooltip = "Only aim at visible targets",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetVisibilityCheck(Value)
-	end)
-	
-	AimbotGroup:AddDropdown("AimPart", {
-		Text = "Aim Part",
-		Default = "Head",
-		Values = {"Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
-		Tooltip = "Body part to aim at",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetAimPart(Value)
-	end)
-	
-	AimbotGroup:AddSlider("Smoothness", {
-		Text = "Smoothness",
-		Default = 0.08,
-		Min = 0.01,
-		Max = 1,
-		Rounding = 2,
-	}):OnChanged(function(Value)
-		self.Aimbot:SetSmoothness(Value)
-	end)
-	
-	AimbotGroup:AddSlider("Prediction", {
-		Text = "Prediction",
-		Default = 0.165,
-		Min = 0,
-		Max = 0.5,
-		Rounding = 3,
-	}):OnChanged(function(Value)
-		self.Aimbot:SetPrediction(Value)
-	end)
-	
-	local KeyGroup = Tab:AddRightGroupbox("Keybind", "key")
-	
-	KeyGroup:AddLabel("Hold E to lock on", true)
-	KeyGroup:AddLabel("Release E to unlock", true)
-	KeyGroup:AddLabel("Aims at closest to crosshair", true)
-	
-	local InfoGroup = Tab:AddRightGroupbox("Info", "info")
-	
-	InfoGroup:AddLabel("Camera lock with prediction", true)
-	InfoGroup:AddLabel("Smoothness: lower = snappier", true)
-	InfoGroup:AddLabel("Prediction: compensates movement", true)
-end
 
 function UI:SetupSettingsTab(Tab)
 	local MenuGroup = Tab:AddLeftGroupbox("Menu", "settings")
