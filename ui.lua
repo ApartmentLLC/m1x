@@ -8,9 +8,10 @@ local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 local Options = Library.Options
 local Toggles = Library.Toggles
 
-function UI:Init(ESP, TriggerBot)
+function UI:Init(ESP, TriggerBot, Aimbot)
 	self.ESP = ESP
 	self.TriggerBot = TriggerBot
+	self.Aimbot = Aimbot
 	Library.ShowToggleFrameInKeybinds = true
 	
 	local Window = Library:CreateWindow({
@@ -27,11 +28,13 @@ function UI:Init(ESP, TriggerBot)
 	local Tabs = {
 		ESP = Window:AddTab("ESP", "eye"),
 		TriggerBot = Window:AddTab("TriggerBot", "crosshair"),
+		Aimbot = Window:AddTab("Aimbot", "target"),
 		Settings = Window:AddTab("Settings", "settings"),
 	}
 	
 	self:SetupESPTab(Tabs.ESP)
 	self:SetupTriggerBotTab(Tabs.TriggerBot)
+	self:SetupAimbotTab(Tabs.Aimbot)
 	self:SetupSettingsTab(Tabs.Settings)
 	
 	ThemeManager:SetLibrary(Library)
@@ -68,17 +71,6 @@ function UI:SetupESPTab(Tab)
 		self.ESP:SetTeamCheck(Value)
 	end)
 	
-	ESPGroup:AddSlider("MaxDistance", {
-		Text = "Max Distance",
-		Default = 1000,
-		Min = 100,
-		Max = 5000,
-		Rounding = 0,
-		Suffix = " studs",
-	}):OnChanged(function(Value)
-		self.ESP:SetMaxDistance(Value)
-	end)
-	
 	ESPGroup:AddSlider("UpdateRate", {
 		Text = "Update Rate",
 		Default = 30,
@@ -94,7 +86,7 @@ function UI:SetupESPTab(Tab)
 	
 	VisualsGroup:AddLabel("Hidden Players: Red", true)
 	VisualsGroup:AddLabel("Visible Players: Green", true)
-	VisualsGroup:AddLabel("Raycast detection", true)
+	VisualsGroup:AddLabel("Infinite range", true)
 	
 	VisualsGroup:AddButton({
 		Text = "Force Update",
@@ -162,7 +154,76 @@ function UI:SetupTriggerBotTab(Tab)
 	
 	InfoGroup:AddLabel("Auto shoots when mouse", true)
 	InfoGroup:AddLabel("is directly over enemy", true)
-	InfoGroup:AddLabel("Uses Raycast + Mouse.Target", true)
+	InfoGroup:AddLabel("Uses Raycast detection", true)
+end
+
+function UI:SetupAimbotTab(Tab)
+	local AimbotGroup = Tab:AddLeftGroupbox("Aimbot", "target")
+	
+	AimbotGroup:AddToggle("AimbotEnabled", {
+		Text = "Aimbot Enabled",
+		Default = false,
+		Tooltip = "Enable camera lock aimbot",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetEnabled(Value)
+	end)
+	
+	AimbotGroup:AddToggle("AimbotTeamCheck", {
+		Text = "Team Check",
+		Default = true,
+		Tooltip = "Ignore teammates",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetTeamCheck(Value)
+	end)
+	
+	AimbotGroup:AddToggle("AimbotVisibility", {
+		Text = "Visibility Check",
+		Default = true,
+		Tooltip = "Only aim at visible targets",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetVisibilityCheck(Value)
+	end)
+	
+	AimbotGroup:AddDropdown("AimPart", {
+		Text = "Aim Part",
+		Default = "Head",
+		Values = {"Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
+		Tooltip = "Body part to aim at",
+	}):OnChanged(function(Value)
+		self.Aimbot:SetAimPart(Value)
+	end)
+	
+	AimbotGroup:AddSlider("Smoothness", {
+		Text = "Smoothness",
+		Default = 0.08,
+		Min = 0.01,
+		Max = 1,
+		Rounding = 2,
+	}):OnChanged(function(Value)
+		self.Aimbot:SetSmoothness(Value)
+	end)
+	
+	AimbotGroup:AddSlider("Prediction", {
+		Text = "Prediction",
+		Default = 0.165,
+		Min = 0,
+		Max = 0.5,
+		Rounding = 3,
+	}):OnChanged(function(Value)
+		self.Aimbot:SetPrediction(Value)
+	end)
+	
+	local KeyGroup = Tab:AddRightGroupbox("Keybind", "key")
+	
+	KeyGroup:AddLabel("Hold E to lock on", true)
+	KeyGroup:AddLabel("Release E to unlock", true)
+	KeyGroup:AddLabel("Aims at closest to crosshair", true)
+	
+	local InfoGroup = Tab:AddRightGroupbox("Info", "info")
+	
+	InfoGroup:AddLabel("Camera lock with prediction", true)
+	InfoGroup:AddLabel("Smoothness: lower = snappier", true)
+	InfoGroup:AddLabel("Prediction: compensates movement", true)
 end
 
 function UI:SetupSettingsTab(Tab)
@@ -173,6 +234,7 @@ function UI:SetupSettingsTab(Tab)
 	MenuGroup:AddButton({
 		Text = "Unload",
 		Func = function()
+			self.Aimbot:Destroy()
 			self.TriggerBot:Destroy()
 			self.ESP:Destroy()
 			Library:Unload()
