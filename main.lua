@@ -308,7 +308,6 @@ function Aimbot:GetClosestPlayerToCursor()
 	if not cam then return nil end
 	
 	local screenCenter = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
-	local mousePos = UserInputService:GetMouseLocation()
 	
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
@@ -333,7 +332,7 @@ function Aimbot:GetClosestPlayerToCursor()
 			local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
 			if not onScreen then continue end
 			
-			local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+			local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
 			if distance < shortestDistance then
 				closestPlayer = player
 				shortestDistance = distance
@@ -421,8 +420,8 @@ function Aimbot:IsTargetValid(target)
 	local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
 	if not onScreen then return false end
 	
-	local mousePos = UserInputService:GetMouseLocation()
-	local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+	local screenCenter = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+	local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
 	if distance > self.FOV then return false end
 	
 	if self.VisibilityCheck then
@@ -458,13 +457,11 @@ function Aimbot:Init()
 			if not self:IsTargetValid(self.Target) then
 				-- Try to find new target
 				self.Target = self:GetClosestPlayerToCursor()
-				if not self.Target then
-					self.Locking = false
-					return
-				end
 			end
 			
-			self:LockOn()
+			if self.Target then
+				self:LockOn()
+			end
 		end
 	end))
 	
@@ -474,11 +471,8 @@ function Aimbot:Init()
 		if not self.Enabled then return end
 		
 		if input.KeyCode == self.Key then
-			local target = self:GetClosestPlayerToCursor()
-			if target then
-				self.Target = target
-				self.Locking = true
-			end
+			self.Locking = true
+			self.Target = self:GetClosestPlayerToCursor()
 		end
 	end))
 	
