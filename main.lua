@@ -255,7 +255,10 @@ local Aimbot = {
 function Aimbot:GetClosestPlayerToCursor()
 	local closestPlayer = nil
 	local shortestDistance = self.FOV
-	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	local cam = Workspace.CurrentCamera
+	if not cam then return nil end
+	
+	local screenCenter = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
 	
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
@@ -277,7 +280,7 @@ function Aimbot:GetClosestPlayerToCursor()
 				if not isVisible then continue end
 			end
 			
-			local screenPos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+			local screenPos, onScreen = cam:WorldToViewportPoint(aimPart.Position)
 			if not onScreen then continue end
 			
 			local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
@@ -294,7 +297,10 @@ end
 function Aimbot:IsVisible(part)
 	if not part then return false end
 	
-	local origin = Camera.CFrame.Position
+	local cam = Workspace.CurrentCamera
+	if not cam then return false end
+	
+	local origin = cam.CFrame.Position
 	local direction = part.Position - origin
 	local distance = direction.Magnitude
 	
@@ -337,11 +343,13 @@ function Aimbot:LockOn()
 	local aimPosition = self:GetPredictionPosition(character)
 	if not aimPosition then return end
 	
-	local currentCF = Camera.CFrame
-	local targetDirection = (aimPosition - currentCF.Position).Unit
+	local cam = Workspace.CurrentCamera
+	if not cam then return end
 	
-	local smoothCF = CFrame.new(currentCF.Position, currentCF.Position + (currentCF.LookVector:Lerp(targetDirection, self.Smoothness)))
-	Camera.CFrame = smoothCF
+	local cameraPos = cam.CFrame.Position
+	local targetCF = CFrame.lookAt(cameraPos, aimPosition)
+	
+	cam.CFrame = cam.CFrame:Lerp(targetCF, self.Smoothness)
 end
 
 function Aimbot:Init()
@@ -375,16 +383,11 @@ function Aimbot:Init()
 	
 	table.insert(self.Connections, game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		if input.KeyCode == self.Key then
-			if not self.Locking then
-				local target = self:GetClosestPlayerToCursor()
-				if target then
-					self.Target = target
-					self.Locking = true
-				end
-			else
-				self.Locking = false
-				self.Target = nil
+		if input.KeyCode == self.Key and self.Enabled then
+			local target = self:GetClosestPlayerToCursor()
+			if target then
+				self.Target = target
+				self.Locking = true
 			end
 		end
 	end))
