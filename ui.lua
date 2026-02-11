@@ -8,15 +8,13 @@ local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 local Options = Library.Options
 local Toggles = Library.Toggles
 
-function UI:Init(ESP, TriggerBot, Aimbot)
+function UI:Init(ESP)
 	self.ESP = ESP
-	self.TriggerBot = TriggerBot
-	self.Aimbot = Aimbot
 	Library.ShowToggleFrameInKeybinds = true
 	
 	local Window = Library:CreateWindow({
 		Title = "m1x",
-		Footer = "v1.0 | Wave Optimized",
+		Footer = "v1.0 | Visuals Only",
 		Icon = 95816097006870,
 		NotifySide = "Right",
 		ShowCustomCursor = true,
@@ -26,13 +24,11 @@ function UI:Init(ESP, TriggerBot, Aimbot)
 	Library.ToggleKeybind = Enum.KeyCode.F1
 	
 	local Tabs = {
-		Aim = Window:AddTab("Aim", "target"),
 		Visuals = Window:AddTab("Visuals", "eye"),
 		Settings = Window:AddTab("Settings", "settings"),
 	}
 	
-	self:SetupAimTab(Tabs.Aim)
-	self:SetupVisualsTab(Tabs.Visuals)
+	self:SetupESPTab(Tabs.Visuals)
 	self:SetupSettingsTab(Tabs.Settings)
 	
 	ThemeManager:SetLibrary(Library)
@@ -45,111 +41,12 @@ function UI:Init(ESP, TriggerBot, Aimbot)
 	
 	Library:Notify({
 		Title = "M1X Loaded",
-		Content = "Press F1 to toggle menu | Hold E for aimbot",
+		Content = "Visuals Only Mode Loaded",
 		Duration = 5,
 	})
 end
 
-function UI:SetupAimTab(Tab)
-	-- Aimbot Section (Left)
-	local AimbotGroup = Tab:AddLeftGroupbox("Aimbot", "target")
-	
-	AimbotGroup:AddToggle("AimbotEnabled", {
-		Text = "Enabled",
-		Default = false,
-		Tooltip = "Enable camera lock aimbot",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetEnabled(Value)
-	end)
-	
-	AimbotGroup:AddToggle("AimbotTeamCheck", {
-		Text = "Team Check",
-		Default = true,
-		Tooltip = "Ignore teammates",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetTeamCheck(Value)
-	end)
-	
-	AimbotGroup:AddDropdown("AimPart", {
-		Text = "Aim Part",
-		Default = "HumanoidRootPart",
-		Values = {"Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
-		Tooltip = "Body part to lock onto",
-	}):OnChanged(function(Value)
-		self.Aimbot:SetAimPart(Value)
-	end)
-	
-	AimbotGroup:AddSlider("Smoothness", {
-		Text = "Smoothness",
-		Default = 0.08,
-		Min = 0.01,
-		Max = 1,
-		Rounding = 2,
-	}):OnChanged(function(Value)
-		self.Aimbot:SetSmoothness(Value)
-	end)
-	
-	AimbotGroup:AddSlider("Prediction", {
-		Text = "Prediction",
-		Default = 0.165,
-		Min = 0,
-		Max = 0.5,
-		Rounding = 3,
-	}):OnChanged(function(Value)
-		self.Aimbot:SetPrediction(Value)
-	end)
-	
-	-- TriggerBot Section (Right)
-	local TriggerGroup = Tab:AddRightGroupbox("TriggerBot", "crosshair")
-	
-	TriggerGroup:AddToggle("TriggerBotEnabled", {
-		Text = "Enabled",
-		Default = false,
-		Tooltip = "Auto shoot when mouse is on enemy",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetEnabled(Value)
-	end)
-	
-	TriggerGroup:AddToggle("TriggerTeamCheck", {
-		Text = "Team Check",
-		Default = true,
-		Tooltip = "Ignore teammates",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetTeamCheck(Value)
-	end)
-	
-	TriggerGroup:AddToggle("TriggerHeadOnly", {
-		Text = "Head Only",
-		Default = true,
-		Tooltip = "Only trigger on head hits",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetHeadOnly(Value)
-	end)
-	
-	TriggerGroup:AddSlider("TriggerDelay", {
-		Text = "Delay",
-		Default = 0,
-		Min = 0,
-		Max = 500,
-		Rounding = 0,
-		Suffix = " ms",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetDelay(Value / 1000)
-	end)
-	
-	TriggerGroup:AddSlider("TriggerCooldown", {
-		Text = "Cooldown",
-		Default = 100,
-		Min = 50,
-		Max = 1000,
-		Rounding = 0,
-		Suffix = " ms",
-	}):OnChanged(function(Value)
-		self.TriggerBot:SetCooldown(Value / 1000)
-	end)
-end
-
-function UI:SetupVisualsTab(Tab)
+function UI:SetupESPTab(Tab)
 	local ESPGroup = Tab:AddLeftGroupbox("ESP Settings", "eye")
 	
 	ESPGroup:AddToggle("ESPEnabled", {
@@ -183,7 +80,7 @@ function UI:SetupVisualsTab(Tab)
 	
 	VisualsGroup:AddLabel("Hidden Players: Red", true)
 	VisualsGroup:AddLabel("Visible Players: Green", true)
-	VisualsGroup:AddLabel("Infinite range", true)
+	VisualsGroup:AddLabel("Raycast detection", true)
 	
 	VisualsGroup:AddButton({
 		Text = "Force Update",
@@ -198,9 +95,6 @@ function UI:SetupVisualsTab(Tab)
 	})
 end
 
--- Removed SetupTriggerBotTab and SetupAimbotTab as they are now merged into SetupAimTab
-
-
 function UI:SetupSettingsTab(Tab)
 	local MenuGroup = Tab:AddLeftGroupbox("Menu", "settings")
 	
@@ -209,8 +103,6 @@ function UI:SetupSettingsTab(Tab)
 	MenuGroup:AddButton({
 		Text = "Unload",
 		Func = function()
-			self.Aimbot:Destroy()
-			self.TriggerBot:Destroy()
 			self.ESP:Destroy()
 			Library:Unload()
 		end,
