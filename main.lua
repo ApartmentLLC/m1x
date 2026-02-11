@@ -91,16 +91,36 @@ end
 Wave:Init()
 
 local ESP = {}
+local Misc = {}
 local UI = {}
 local Utils = {}
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 local UserInputService = game:GetService("UserInputService")
+
+-- Misc Module
+Misc.FullBrightConnection = nil
+
+function Misc:SetFullBright(enabled)
+	if enabled then
+		if not self.FullBrightConnection then
+			self.FullBrightConnection = RunService.RenderStepped:Connect(function()
+				Lighting.ClockTime = 12
+			end)
+		end
+	else
+		if self.FullBrightConnection then
+			self.FullBrightConnection:Disconnect()
+			self.FullBrightConnection = nil
+		end
+	end
+end
 
 ESP.Enabled = false
 ESP.Highlights = {}
@@ -456,9 +476,10 @@ function Utils:IsValidCharacter(character)
 end
 
 ESP:Init()
-UI:Init()
+UI:Init(ESP, Misc)
 
 M1X.ESP = ESP
+M1X.Misc = Misc
 M1X.UI = UI
 M1X.Utils = Utils
 M1X.Wave = Wave

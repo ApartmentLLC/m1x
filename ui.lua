@@ -8,13 +8,14 @@ local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 local Options = Library.Options
 local Toggles = Library.Toggles
 
-function UI:Init(ESP)
+function UI:Init(ESP, Misc)
 	self.ESP = ESP
+	self.Misc = Misc
 	Library.ShowToggleFrameInKeybinds = true
 	
 	local Window = Library:CreateWindow({
 		Title = "m1x",
-		Footer = "v1.0 | Visuals Only",
+		Footer = "v1.0 | Visuals & Misc",
 		Icon = 95816097006870,
 		NotifySide = "Right",
 		ShowCustomCursor = true,
@@ -25,10 +26,12 @@ function UI:Init(ESP)
 	
 	local Tabs = {
 		Visuals = Window:AddTab("Visuals", "eye"),
+		Misc = Window:AddTab("Misc", "wrench"),
 		Settings = Window:AddTab("Settings", "settings"),
 	}
 	
 	self:SetupESPTab(Tabs.Visuals)
+	self:SetupMiscTab(Tabs.Misc)
 	self:SetupSettingsTab(Tabs.Settings)
 	
 	ThemeManager:SetLibrary(Library)
@@ -93,6 +96,18 @@ function UI:SetupESPTab(Tab)
 			})
 		end,
 	})
+end
+
+function UI:SetupMiscTab(Tab)
+	local LightingGroup = Tab:AddLeftGroupbox("Lighting", "sun")
+	
+	LightingGroup:AddToggle("FullBright", {
+		Text = "Full Bright",
+		Default = false,
+		Tooltip = "Sets time to 12:00 PM (Morning/Noon)",
+	}):OnChanged(function(Value)
+		self.Misc:SetFullBright(Value)
+	end)
 end
 
 function UI:SetupSettingsTab(Tab)
